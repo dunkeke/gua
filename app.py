@@ -3,6 +3,7 @@ import yfinance as yf
 import pandas as pd
 import random
 import time
+import textwrap  # ✅ 关键修复：添加 textwrap 引用
 from datetime import datetime, timedelta
 
 # --- 1. 页面配置 ---
@@ -237,6 +238,7 @@ with tab_market:
                 end_date = pd.to_datetime(date_val)
                 start_date = end_date - timedelta(days=40)
                 
+                # yfinance download
                 df = yf.download(symbol, start=start_date, end=end_date + timedelta(days=1), progress=False)
                 
                 # 处理 MultiIndex 列名 (yfinance v0.2+)
@@ -253,7 +255,8 @@ with tab_market:
                     if not ben_info:
                          st.error(f"Hexagram Key Error: {ben_key}")
                     else:
-                        # 显示结果卡片
+                        st.markdown("---")
+                        
                         c1, c2 = st.columns(2)
                         
                         # 使用 textwrap.dedent + replace 来确保 HTML 格式正确且无缩进
