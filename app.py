@@ -3,7 +3,7 @@ import yfinance as yf
 import pandas as pd
 import random
 import time
-import textwrap  # 引入这个库来处理缩进问题
+import textwrap  # 关键：用于修复HTML缩进显示问题
 from datetime import datetime, timedelta
 
 # --- 1. 页面配置 ---
@@ -14,12 +14,12 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# --- 2. 注入 CSS 样式 (双风格核心) ---
+# --- 2. 注入 CSS 样式 ---
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@500;700&family=JetBrains+Mono:wght@400;700&display=swap');
 
-    /* 全局背景微调 */
+    /* 全局背景 */
     .stApp {
         background-color: #f8fafc;
     }
@@ -29,10 +29,10 @@ st.markdown("""
     .trad-font { font-family: 'Noto Serif SC', serif; }
     .calligraphy { font-family: 'Ma Shan Zheng', cursive; }
     
-    /* --- CSS 绘制卦象 (解决手机不显示问题) --- */
+    /* --- CSS 绘制卦象 (解决显示问题) --- */
     .hex-container {
         display: flex;
-        flex-direction: column-reverse; /* 从下往上画: 初爻在底 */
+        flex-direction: column-reverse; /* 从下往上画 */
         gap: 4px;
         width: 60px;
         margin: 0 auto;
@@ -55,35 +55,16 @@ st.markdown("""
         background-color: #1f2937; /* 墨色 */
         border-radius: 2px;
     }
-    .dark .line-yin-part { background-color: #94a3b8; }
     
-    /* --- 能源板块样式 (Tech) --- */
-    .tech-card {
-        background: #f1f5f9;
-        border: 1px solid #cbd5e1;
-        border-radius: 8px;
-        padding: 15px;
-        font-family: 'JetBrains Mono', monospace;
-    }
-    
-    /* --- 问卜板块样式 (Trad) --- */
-    .trad-card {
-        background-color: #fffbf0; /* 宣纸黄 */
-        border: 2px solid #b91c1c;
+    /* --- 结果卡片 --- */
+    .result-card {
+        background: white;
+        padding: 20px;
         border-radius: 15px;
-        padding: 30px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        border: 1px solid #e2e8f0;
+        text-align: center;
     }
-    .trad-title {
-        color: #b91c1c;
-        font-weight: bold;
-        font-size: 1.2rem;
-        margin-bottom: 10px;
-    }
-    
-    /* 隐藏 Streamlit 默认元素 */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
     </style>
 """, unsafe_allow_html=True)
 
@@ -185,6 +166,7 @@ def calculate_hexagram(df):
 
     subset = df.tail(6).iloc[::-1] # [Newest...Oldest]
     
+    # 这里的 i 是从 0 (最新) 到 5 (最旧)
     for i in range(6):
         row = subset.iloc[i]
         
@@ -406,3 +388,4 @@ with tab_daily:
                 st.markdown(daily_html, unsafe_allow_html=True)
 
     st.markdown('</div>', unsafe_allow_html=True)
+
