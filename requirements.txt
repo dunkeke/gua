@@ -1,4 +1,3 @@
-lxml 
 streamlit 
 yfinance 
 pandas
