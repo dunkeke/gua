@@ -3,7 +3,6 @@ import yfinance as yf
 import pandas as pd
 import random
 import time
-import textwrap  # 关键：用于修复HTML缩进显示问题
 from datetime import datetime, timedelta
 
 # --- 1. 页面配置 ---
@@ -14,7 +13,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# --- 2. 注入 CSS 样式 ---
+# --- 2. 注入 CSS 样式 (美化核心) ---
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@500;700&family=JetBrains+Mono:wght@400;700&display=swap');
@@ -24,47 +23,52 @@ st.markdown("""
         background-color: #f8fafc;
     }
     
-    /* --- 字体定义 --- */
+    /* 字体定义 */
     .tech-font { font-family: 'JetBrains Mono', monospace; }
     .trad-font { font-family: 'Noto Serif SC', serif; }
     .calligraphy { font-family: 'Ma Shan Zheng', cursive; }
     
-    /* --- CSS 绘制卦象 (解决显示问题) --- */
+    /* 卦象绘制 (纯CSS，确保手机可见) */
     .hex-container {
         display: flex;
-        flex-direction: column-reverse; /* 从下往上画 */
-        gap: 4px;
-        width: 60px;
+        flex-direction: column-reverse;
+        gap: 5px;
+        width: 70px;
         margin: 0 auto;
     }
     .line-yang {
         width: 100%;
-        height: 8px;
-        background-color: #b91c1c; /* 朱砂红 */
+        height: 10px;
+        background-color: #b91c1c;
         border-radius: 2px;
     }
     .line-yin {
         display: flex;
         justify-content: space-between;
         width: 100%;
-        height: 8px;
+        height: 10px;
     }
     .line-yin-part {
         width: 42%;
         height: 100%;
-        background-color: #1f2937; /* 墨色 */
+        background-color: #1f2937;
         border-radius: 2px;
     }
     
-    /* --- 结果卡片 --- */
+    /* 卡片容器 */
     .result-card {
         background: white;
-        padding: 20px;
+        padding: 25px;
         border-radius: 15px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        box-shadow: 0 4px 15px rgba(0,0,0,0.05);
         border: 1px solid #e2e8f0;
         text-align: center;
+        margin-bottom: 20px;
     }
+    
+    /* 隐藏干扰元素 */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
     </style>
 """, unsafe_allow_html=True)
 
@@ -136,9 +140,8 @@ HEXAGRAMS = {
     "0,1,0,1,0,1": {"name": "未济", "pinyin": "wèi jì", "judgment": "亨。", "interp": "【大象】火在水上，未济。<br>【量化】行情未完，充满变数。<br>【策略】寻找新的增长点，在此博弈。<br>【生活】未完成，充满希望。", "outlook": "neutral"}
 }
 
-# --- 4. 辅助函数: 生成卦象HTML ---
+# --- 4. 辅助函数: 生成卦象HTML (压扁成单行) ---
 def get_hexagram_html(key_str):
-    """生成红/黑线条的 HTML (无缩进)"""
     lines = key_str.split(",") 
     html_lines = []
     # 视觉显示 Top->Bottom (上->初)，所以需要 reversed
@@ -148,14 +151,19 @@ def get_hexagram_html(key_str):
         else:
             html_lines.append('<div class="line-yin"><div class="line-yin-part"></div><div class="line-yin-part"></div></div>')
     
+    # 关键：压缩成一行
     return f'<div class="hex-container">{"".join(html_lines)}</div>'
 
 # --- 5. 计算逻辑 ---
 def calculate_hexagram(df):
-    closes = df['Close'].values
-    opens = df['Open'].values
+    # 确保是 Series, 避免 MultiIndex 导致的问题
+    try:
+        closes = df['Close'].values.flatten()
+        opens = df['Open'].values.flatten()
+    except:
+        closes = df['Close']
+        opens = df['Open']
     
-    # 修复 numpy/pandas 版本兼容性
     changes = abs((closes - opens) / opens)
     avg_change = changes.mean() 
     volatility_threshold = avg_change * 1.5
@@ -164,19 +172,20 @@ def calculate_hexagram(df):
     zhi_lines = [] 
     details = []
 
-    subset = df.tail(6).iloc[::-1] # [Newest...Oldest]
+    # 取最后6天，倒序遍历 (i=0是最新)
+    # 这里逻辑：df.tail(6) 是 [Oldest...Newest]
+    # 反转后 subset 是 [Newest...Oldest]
+    subset = df.tail(6).iloc[::-1] 
     
-    # 这里的 i 是从 0 (最新) 到 5 (最旧)
     for i in range(6):
         row = subset.iloc[i]
         
-        # 使用 item() 确保获取标量值
-        close_val = row['Close'].item() if hasattr(row['Close'], 'item') else row['Close']
-        open_val = row['Open'].item() if hasattr(row['Open'], 'item') else row['Open']
+        # 强制标量化，防止 Series 歧义
+        c = float(row['Close'])
+        o = float(row['Open'])
         
-        is_up = close_val >= open_val
-        change_pct = abs((close_val - open_val) / open_val)
-        
+        is_up = c >= o
+        change_pct = abs((c - o) / o)
         is_moving = change_pct > volatility_threshold
         
         if is_up:
@@ -192,8 +201,8 @@ def calculate_hexagram(df):
         
         details.append({
             "date": row.name.strftime('%Y-%m-%d'),
-            "close": close_val,
-            "change": (close_val - open_val) / open_val,
+            "close": c,
+            "change": (c - o) / o,
             "type": line_val,
             "position": i 
         })
@@ -223,72 +232,78 @@ with tab_market:
         date_val = st.date_input("基准日期 (Date)", datetime.now())
         
     if st.button("🚀 启动量化模型 (RUN MODEL)", type="primary"):
-        with st.spinner("正在连接交易所数据..."):
+        with st.spinner("Connecting to Exchange..."):
             try:
                 end_date = pd.to_datetime(date_val)
                 start_date = end_date - timedelta(days=40)
                 
-                # yfinance download
                 df = yf.download(symbol, start=start_date, end=end_date + timedelta(days=1), progress=False)
                 
+                # 处理 MultiIndex 列名 (yfinance v0.2+)
                 if isinstance(df.columns, pd.MultiIndex):
-                    df.columns = df.columns.droplevel(1)
+                    df.columns = df.columns.get_level_values(0)
 
                 if len(df) < 6:
-                    st.error("数据不足，无法生成卦象 (需至少6个交易日)")
+                    st.error("数据不足 (Data Insufficient)")
                 else:
                     ben_key, zhi_key, line_details = calculate_hexagram(df)
-                    
                     ben_info = HEXAGRAMS.get(ben_key)
                     zhi_info = HEXAGRAMS.get(zhi_key)
                     
                     if not ben_info:
-                        st.error(f"System Error: Invalid Hexagram Key {ben_key}. Please check dictionary.")
+                         st.error(f"Hexagram Key Error: {ben_key}")
                     else:
-                        st.markdown("---")
-                        
+                        # 显示结果卡片
                         c1, c2 = st.columns(2)
                         
-                        # 本卦
+                        # 使用 textwrap.dedent + replace 来确保 HTML 格式正确且无缩进
+                        
+                        # 1. 本卦卡片
                         with c1:
                             hex_html = get_hexagram_html(ben_key)
-                            # 使用 textwrap.dedent 去除缩进，防止 markdown 代码块误判
-                            html_content = textwrap.dedent(f"""
-                            <div class="result-card">
-                                <div style="color:#64748b; font-weight:bold; font-size:12px; margin-bottom:8px;">CURRENT (本卦)</div>
-                                {hex_html}
-                                <div style="font-size:24px; font-weight:bold; margin-top:10px;">{ben_info['name']}</div>
-                                <div style="font-size:14px; font-style:italic; color:#475569;">{ben_info['judgment']}</div>
-                                <hr style="margin:10px 0;">
-                                <div style="text-align:left; font-size:13px; line-height:1.6;">{ben_info['interp'].replace('\n', '<br>')}</div>
-                            </div>
-                            """)
-                            st.markdown(html_content, unsafe_allow_html=True)
-                            
-                        # 之卦
+                            html_str = textwrap.dedent(f"""
+                                <div class="result-card">
+                                    <div style="color:#64748b; font-weight:bold; font-size:12px; margin-bottom:5px;">CURRENT PHASE</div>
+                                    {hex_html}
+                                    <div style="font-size:24px; font-weight:bold; margin-top:10px;">{ben_info['name']}</div>
+                                    <div style="font-size:14px; font-style:italic; color:#64748b;">{ben_info['judgment']}</div>
+                                    <hr style="margin:10px 0; border-top: 1px solid #e2e8f0;">
+                                    <div style="text-align:left; font-size:13px; line-height:1.6;">
+                                        {ben_info['interp'].replace('\n', '')}
+                                    </div>
+                                </div>
+                            """).strip()
+                            st.markdown(html_content := html_str, unsafe_allow_html=True)
+
+                        # 2. 之卦卡片
                         with c2:
                             hex_html_zhi = get_hexagram_html(zhi_key)
                             opacity = "1" if ben_key != zhi_key else "0.5"
-                            title_suffix = "(变卦)" if ben_key != zhi_key else "(无变动)"
-                            html_content_zhi = textwrap.dedent(f"""
-                            <div class="result-card" style="opacity:{opacity};">
-                                <div style="color:#64748b; font-weight:bold; font-size:12px; margin-bottom:8px;">FUTURE (之卦)</div>
-                                {hex_html_zhi}
-                                <div style="font-size:24px; font-weight:bold; margin-top:10px;">{zhi_info['name']} {title_suffix}</div>
-                                <div style="font-size:14px; font-style:italic; color:#475569;">{zhi_info['judgment']}</div>
-                                <hr style="margin:10px 0;">
-                                <div style="text-align:left; font-size:13px; line-height:1.6;">{zhi_info['interp'].replace('\n', '<br>')}</div>
-                            </div>
-                            """)
-                            st.markdown(html_content_zhi, unsafe_allow_html=True)
+                            suffix = "(变卦)" if ben_key != zhi_key else "(无变动)"
+                            html_str_zhi = textwrap.dedent(f"""
+                                <div class="result-card" style="opacity:{opacity};">
+                                    <div style="color:#64748b; font-weight:bold; font-size:12px; margin-bottom:5px;">PROJECTION</div>
+                                    {hex_html_zhi}
+                                    <div style="font-size:24px; font-weight:bold; margin-top:10px;">{zhi_info['name']} {suffix}</div>
+                                    <div style="font-size:14px; font-style:italic; color:#64748b;">{zhi_info['judgment']}</div>
+                                    <hr style="margin:10px 0; border-top: 1px solid #e2e8f0;">
+                                    <div style="text-align:left; font-size:13px; line-height:1.6;">
+                                        {zhi_info['interp'].replace('\n', '')}
+                                    </div>
+                                </div>
+                            """).strip()
+                            st.markdown(html_str_zhi, unsafe_allow_html=True)
 
+                        # 3. K线表
                         st.subheader("📊 K-Line Sequence")
-                        
                         table_data = []
                         pos_map = ["初爻 (Bottom)", "二爻", "三爻", "四爻", "五爻", "上爻 (Top)"]
                         
-                        for i in range(5, -1, -1):
-                            d = line_details[i]
+                        # 显示顺序: 上爻(最旧) -> 初爻(最新) ?
+                        # 不，通常K线列表习惯是：最新在最上。
+                        # 这里我们按照 line_details 顺序 (0是最新)
+                        
+                        for d in line_details:
                             type_str = "阳 (7)"
                             if d['type'] == 8: type_str = "阴 (8)"
                             if d['type'] == 9: type_str = "老阳 (9) 🔴"
@@ -296,17 +311,16 @@ with tab_market:
                             
                             table_data.append({
                                 "Date": d['date'],
-                                "Position": pos_map[d['position']],
+                                "Pos": pos_map[d['position']],
                                 "Close": f"{d['close']:.2f}",
                                 "Chg%": f"{d['change']*100:.2f}%",
                                 "Type": type_str
                             })
-                            
+                        
                         st.dataframe(pd.DataFrame(table_data), use_container_width=True)
 
             except Exception as e:
-                st.error(f"Error: {e}")
-                
+                st.error(f"Data Error: {e}")
     st.markdown('</div>', unsafe_allow_html=True)
 
 # --- DAILY TAB ---
@@ -314,9 +328,9 @@ with tab_daily:
     st.markdown('<div class="trad-font">', unsafe_allow_html=True)
     
     st.markdown("""
-    <div style="text-align:center; padding: 40px 0;">
-        <h1 class="calligraphy" style="font-size: 48px; color: #b91c1c;">诚心问卜</h1>
-        <p style="color: #888;">默念心中之事，点击下方按钮起卦</p>
+    <div style="text-align:center; padding: 30px 0;">
+        <h1 class="calligraphy" style="font-size: 42px; color: #b91c1c;">诚心问卜</h1>
+        <p style="color: #888; font-size: 14px;">默念心中之事，点击下方按钮起卦</p>
     </div>
     """, unsafe_allow_html=True)
     
@@ -327,7 +341,7 @@ with tab_daily:
             st.warning("请先输入问题")
         else:
             with st.spinner("正在以此诚心，沟通天地..."):
-                time.sleep(2) 
+                time.sleep(1.5)
                 
                 lines = []
                 for _ in range(6):
@@ -338,7 +352,6 @@ with tab_daily:
                 
                 ben_res = []
                 zhi_res = []
-                
                 for val in lines:
                     if val in [7, 9]: 
                         ben_res.append("1")
@@ -356,35 +369,39 @@ with tab_daily:
                 ben_html = get_hexagram_html(d_ben_key)
                 zhi_html = get_hexagram_html(d_zhi_key)
                 
+                # Daily Result Card
                 daily_html = textwrap.dedent(f"""
-                <div style="background-color:#fffbf0; border:2px solid #b91c1c; border-radius:15px; padding:30px; margin-top:20px;">
-                    <div style="text-align:center; margin-bottom:20px; color:#b91c1c; font-weight:bold;">问：{question}</div>
+                <div class="trad-card" style="background-color:#fffbf0; border:2px solid #b91c1c; border-radius:15px; padding:20px; margin-top:20px;">
+                    <div style="text-align:center; margin-bottom:20px; color:#b91c1c; font-weight:bold; font-size:18px;">问：{question}</div>
                     
-                    <div style="display:flex; justify-content:space-around;">
-                        <div style="text-align:center;">
-                            <div style="font-size:14px; color:#888; margin-bottom:8px;">本卦 (现状)</div>
+                    <div style="display:flex; justify-content:space-around; align-items:flex-start;">
+                        <div style="text-align:center; flex:1;">
+                            <div style="font-size:12px; color:#888; margin-bottom:8px;">本卦 (现状)</div>
                             {ben_html}
-                            <div class="calligraphy" style="font-size:36px; margin-top:10px;">{d_ben['name']}</div>
-                            <div style="font-size:14px;">{d_ben['judgment']}</div>
+                            <div class="calligraphy" style="font-size:32px; margin-top:8px; color:#333;">{d_ben['name']}</div>
+                            <div style="font-size:13px; color:#666;">{d_ben['judgment']}</div>
                         </div>
                         
-                        <div style="text-align:center; opacity: {1.0 if d_ben_key != d_zhi_key else 0.3};">
-                            <div style="font-size:14px; color:#888; margin-bottom:8px;">之卦 (变数)</div>
+                        <div style="text-align:center; flex:1; opacity: {1.0 if d_ben_key != d_zhi_key else 0.3};">
+                            <div style="font-size:12px; color:#888; margin-bottom:8px;">之卦 (变数)</div>
                             {zhi_html}
-                            <div class="calligraphy" style="font-size:36px; margin-top:10px;">{d_zhi['name']}</div>
-                            <div style="font-size:14px;">{d_zhi['judgment']}</div>
+                            <div class="calligraphy" style="font-size:32px; margin-top:8px; color:#333;">{d_zhi['name']}</div>
+                            <div style="font-size:13px; color:#666;">{d_zhi['judgment']}</div>
                         </div>
                     </div>
                     
                     <hr style="border-color:#e5e7eb; margin:20px 0;">
                     
-                    <div style="background:rgba(255,255,255,0.5); padding:15px; border-radius:8px;">
-                        <p style="font-weight:bold; color:#b91c1c;">💡 锦囊妙计：</p>
-                        <div style="line-height:1.8;">{d_ben['interp'].replace('\n', '<br>')}</div>
-                        {f'<p style="margin-top:10px; color:#d97706;">⚡ <strong>变爻启示：</strong>局势正在向 {d_zhi["name"]} 转变，请参考之卦建议。</p>' if d_ben_key != d_zhi_key else ''}
+                    <div style="background:rgba(255,255,255,0.6); padding:15px; border-radius:8px; border:1px dashed #d1d5db;">
+                        <p style="font-weight:bold; color:#b91c1c; margin-bottom:5px;">💡 锦囊妙计：</p>
+                        <div style="line-height:1.6; font-size:14px; color:#333;">
+                            {d_ben['interp'].replace('\n', '')}
+                        </div>
+                        {f'<div style="margin-top:10px; font-size:13px; color:#d97706;">⚡ <strong>变爻启示：</strong>局势正在向 {d_zhi["name"]} 转变，请参考之卦建议。</div>' if d_ben_key != d_zhi_key else ''}
                     </div>
                 </div>
-                """)
+                """).strip()
+                
                 st.markdown(daily_html, unsafe_allow_html=True)
 
     st.markdown('</div>', unsafe_allow_html=True)
