@@ -147,7 +147,7 @@ HEXAGRAMS = {
     "0,1,0,1,0,1": {"name": "未济", "pinyin": "wèi jì", "symbol": "䷿", "judgment": "亨。", "interp": "【大象】火在水上，未济。\n【量化】行情未完，充满变数。\n【策略】寻找新的增长点，在此博弈。\n【生活】未完成，充满希望。", "outlook": "neutral"}
 };
 
-// --- 3. 工具函数 ---
+# --- 3. 工具函数 ---
 def calculate_hexagram(df):
     """
     生成本卦和之卦
@@ -404,5 +404,6 @@ with tab_daily:
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
+
 
     st.markdown('</div>', unsafe_allow_html=True)
