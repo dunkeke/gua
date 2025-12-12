@@ -32,7 +32,7 @@ st.markdown("""
     /* 卦象绘制 (纯CSS，确保手机可见) */
     .hex-container {
         display: flex;
-        flex-direction: column-reverse;
+        flex-direction: column;
         gap: 5px;
         width: 70px;
         margin: 0 auto;
